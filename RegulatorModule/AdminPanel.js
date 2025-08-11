@@ -1,30 +1,25 @@
 import React, { useState } from 'react';
-import { Box, Button, TextField, Typography, Paper, IconButton, Divider } from '@mui/material';
-import { AddCircle, Delete, Close } from '@mui/icons-material';
+import {
+  Box, Button, TextField, Typography, Paper, IconButton, Divider, Stack,
+  Accordion, AccordionSummary, AccordionDetails
+} from '@mui/material';
+import { Delete, Close, Add, UploadFile } from '@mui/icons-material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 const AdminPanel = ({ data, actions, onClose }) => {
-  const [regionName, setRegionName] = useState('');
-  const [regionCoords, setRegionCoords] = useState('');
-  const [regulatorName, setRegulatorName] = useState('');
-  const [selectedRegion, setSelectedRegion] = useState('');
+  const [newRegulatorName, setNewRegulatorName] = useState('');
+  const [expandedRegion, setExpandedRegion] = useState(false);
 
-  const handleAddRegion = () => {
-    const coords = regionCoords.split(',').map(c => parseFloat(c.trim()));
-    if (regionName && coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-      actions.addRegion(regionName, coords);
-      setRegionName('');
-      setRegionCoords('');
-    } else {
-      alert('Please enter a valid name and coordinates (e.g., "-98.5, 39.8").');
-    }
+  const handleAccordionChange = (regionId) => (event, isExpanded) => {
+    setExpandedRegion(isExpanded ? regionId : false);
   };
 
-  const handleAddRegulator = () => {
-    if (regulatorName && selectedRegion) {
-      actions.addRegulator(selectedRegion, regulatorName);
-      setRegulatorName('');
+  const handleAddRegulator = (regionId) => {
+    if (newRegulatorName.trim()) {
+      actions.addRegulator(regionId, newRegulatorName.trim());
+      setNewRegulatorName(''); // Reset input field
     } else {
-      alert('Please select a region and enter a regulator name.');
+      alert('Please enter a name for the regulator.');
     }
   };
 
@@ -32,11 +27,8 @@ const AdminPanel = ({ data, actions, onClose }) => {
     const file = e.target.files[0];
     if (file && file.type === 'application/pdf') {
       const reader = new FileReader();
-      reader.readAsDataURL(file); // Reads file as a base64 string
-      reader.onload = () => {
-        actions.updateRegulatorPdf(regionId, regulatorId, reader.result);
-        alert(`PDF uploaded for regulator!`);
-      };
+      reader.readAsDataURL(file);
+      reader.onload = () => actions.updateRegulatorPdf(regionId, regulatorId, reader.result);
       reader.onerror = (error) => console.error('Error reading file:', error);
     } else {
       alert('Please select a valid PDF file.');
@@ -44,49 +36,79 @@ const AdminPanel = ({ data, actions, onClose }) => {
   };
 
   return (
-    <Paper elevation={6} sx={{ p: 3, m: 2, backgroundColor: 'rgba(26, 26, 26, 0.95)', color: 'white', border: '1px solid #42A5F5', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}>
+    <Paper elevation={6} sx={{
+      p: 3, m: 2, backgroundColor: 'rgba(26, 26, 26, 0.97)', color: 'white',
+      border: '1px solid #42A5F5', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto',
+      backdropFilter: 'blur(5px)'
+    }}>
       <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Typography variant="h5" gutterBottom>Admin Control Panel</Typography>
+        <Typography variant="h5" gutterBottom>Content Management</Typography>
         <IconButton onClick={onClose} sx={{ color: 'white' }}><Close /></IconButton>
       </Box>
+      <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
+        Manage regulators and their documents for each region.
+      </Typography>
       <Divider sx={{ my: 2, borderColor: '#555' }} />
 
-      <Box component="form" noValidate autoComplete="off" sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>Add a New Region</Typography>
-        <TextField label="Region Name" variant="outlined" size="small" value={regionName} onChange={e => setRegionName(e.target.value)} sx={{ mr: 1, mb: 1 }} />
-        <TextField label="Coordinates (lon, lat)" variant="outlined" size="small" value={regionCoords} onChange={e => setRegionCoords(e.target.value)} sx={{ mr: 1, mb: 1 }}/>
-        <Button variant="contained" onClick={handleAddRegion} startIcon={<AddCircle />}>Add Region</Button>
-      </Box>
-      <Divider sx={{ my: 2, borderColor: '#555' }} />
-
-      <Box component="form" noValidate autoComplete="off" sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>Add a New Regulator</Typography>
-        <TextField select SelectProps={{ native: true }} value={selectedRegion} onChange={e => setSelectedRegion(e.target.value)} label="Select Region" variant="outlined" size="small" sx={{ mr: 1, minWidth: 200, mb: 1 }}>
-          <option value="">-- Select a Region --</option>
-          {data.regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </TextField>
-        <TextField label="Regulator Name" variant="outlined" size="small" value={regulatorName} onChange={e => setRegulatorName(e.target.value)} sx={{ mr: 1, mb: 1 }} />
-        <Button variant="contained" onClick={handleAddRegulator} disabled={!selectedRegion || !regulatorName} startIcon={<AddCircle />}>Add Regulator</Button>
-      </Box>
-      <Divider sx={{ my: 2, borderColor: '#555' }} />
-
-      <Typography variant="h6" sx={{ mb: 1 }}>Manage Existing Content</Typography>
       {data.regions.map(region => (
-        <Box key={region.id} sx={{ mb: 2, p: 2, border: '1px solid #444', borderRadius: '8px' }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{region.name} 
-            <IconButton size="small" onClick={() => window.confirm('Are you sure you want to delete this entire region and all its regulators?') && actions.deleteRegion(region.id)}><Delete sx={{color: '#ff7961'}}/></IconButton>
-          </Typography>
-          {data.regulators[region.id]?.map(regulator => (
-            <Box key={regulator.id} display="flex" alignItems="center" sx={{ ml: 2, mt: 1, flexWrap: 'wrap' }}>
-              <Typography sx={{ flexGrow: 1, minWidth: '150px' }}>{regulator.name}</Typography>
-              <Button variant="text" component="label" sx={{textTransform: 'none', color: regulator.pdfData ? '#81c784' : '#42A5F5'}}>
-                {regulator.pdfData ? 'Change PDF' : 'Upload PDF'}
-                <input type="file" hidden accept=".pdf" onChange={(e) => handlePdfUpload(e, region.id, regulator.id)} />
-              </Button>
-              <IconButton size="small" onClick={() => actions.deleteRegulator(region.id, regulator.id)}><Delete sx={{color: '#ff7961'}} /></IconButton>
-            </Box>
-          ))}
-        </Box>
+        <Accordion
+          key={region.id}
+          expanded={expandedRegion === region.id}
+          onChange={handleAccordionChange(region.id)}
+          sx={{ backgroundColor: '#333', color: 'white', mb: 1 }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: 'white' }} />}>
+            <Typography variant="h6">{region.name}</Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ backgroundColor: '#222' }}>
+            <Stack spacing={2}>
+              {/* List existing regulators */}
+              {data.regulators[region.id]?.length > 0 ? (
+                data.regulators[region.id].map(regulator => (
+                  <Paper key={regulator.id} sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: '#424242' }}>
+                    <Typography sx={{ flexGrow: 1 }}>{regulator.name}</Typography>
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      size="small"
+                      startIcon={<UploadFile />}
+                      sx={{ textTransform: 'none', color: regulator.pdfData ? '#81c784' : '#42A5F5', borderColor: regulator.pdfData ? '#81c784' : '#42A5F5' }}
+                    >
+                      {regulator.pdfData ? 'Change PDF' : 'Upload'}
+                      <input type="file" hidden accept=".pdf" onChange={(e) => handlePdfUpload(e, region.id, regulator.id)} />
+                    </Button>
+                    <IconButton size="small" onClick={() => actions.deleteRegulator(region.id, regulator.id)}>
+                      <Delete sx={{ color: '#ff7961' }} />
+                    </IconButton>
+                  </Paper>
+                ))
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', my: 2}}>
+                  No regulators added for this region.
+                </Typography>
+              )}
+
+              {/* Add new regulator form */}
+              <Divider sx={{ borderColor: '#555' }} />
+              <Box component="form" onSubmit={(e) => { e.preventDefault(); handleAddRegulator(region.id); }}>
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>Add New Regulator to {region.name}</Typography>
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    label="Regulator Name"
+                    variant="outlined"
+                    size="small"
+                    fullWidth
+                    value={newRegulatorName}
+                    onChange={e => setNewRegulatorName(e.target.value)}
+                  />
+                  <Button type="submit" variant="contained" startIcon={<Add />}>
+                    Add
+                  </Button>
+                </Stack>
+              </Box>
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
       ))}
     </Paper>
   );
